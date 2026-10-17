@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef } from "react";
 import { toFetchStates } from "./api";
 
-const POLL_MS = 15000;
-const MAX_DELAY = 120000;
-const KEEP_FOR_S = 120;
-const MAX_TRAIL = 20;
+const poll_sec = 15000;
+const mx_delay = 120000;
+const wait_s = 120;
+const mx_trail = 20;
 
 export function useAircraft(bbox, useSample = false) {
     const [aircraft, setAircraft] = useState({});
@@ -14,7 +14,7 @@ export function useAircraft(bbox, useSample = false) {
         lastUpdated: null
     });
 
-    const delayRef = useRef(POLL_MS);
+    const delayRef = useRef(poll_sec);
 
     useEffect(() => {
         let timeoutId;
@@ -22,7 +22,7 @@ export function useAircraft(bbox, useSample = false) {
 
         setAircraft({});
         setStatus({ error: null, lastUpdated: null });
-        delayRef.current = POLL_MS;
+        delayRef.current = poll_sec;
 
         async function poll() {
             try {
@@ -50,14 +50,14 @@ export function useAircraft(bbox, useSample = false) {
 
                         next[p.id] = {
                             ...p,
-                            trail: trail.slice(-MAX_TRAIL),
+                            trail: trail.slice(-mx_trail),
                             seenAt: now
                         };
                     }
 
                     // keep temporarily missing aircraft
                     for (const [id, plane] of Object.entries(prev)) {
-                        if (!seen.has(id) && now - plane.seenAt < KEEP_FOR_S) {
+                        if (!seen.has(id) && now - plane.seenAt < wait_s) {
                             next[id] = plane;
                         }
                     }
@@ -71,7 +71,7 @@ export function useAircraft(bbox, useSample = false) {
                     lastUpdated: Date.now()
                 });
 
-                delayRef.current = POLL_MS;
+                delayRef.current = poll_sec;
 
             } catch (error) {
                 if (cancelled) return;
@@ -85,7 +85,7 @@ export function useAircraft(bbox, useSample = false) {
                 // double delay, maximum 2 minutes
                 delayRef.current = Math.min(
                     delayRef.current * 2,
-                    MAX_DELAY
+                    mx_delay
                 );
             }
 
