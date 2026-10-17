@@ -1,20 +1,34 @@
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAircraft } from "./useAircraft";
 import { REGIONS } from "./regions";
 import "./App.css";
 
-const USE_SAMPLE = false;
+const USE_SAMPLE = true;
 
-function planeIcon(heading, stale) {
+function planeIcon(heading, stale, selected) {
   return L.divIcon({
     className: "",
-    html: `<div style="transform:rotate(${(heading ?? 0) - 45}deg);font-size:20px;opacity:${stale ? 0.4 : 1}">✈️</div>`,
-    iconSize: [24, 24],
+    html: `<div style="
+      transform: rotate(${(heading ?? 0) - 45}deg);
+      font-size: ${selected ? "26px" : "20px"};
+      opacity: ${stale ? 0.4 : 1};
+      filter: ${selected ? "drop-shadow(0 0 6px #ff3333) drop-shadow(0 0 10px #ff0000)" : "none"};
+      transition: transform 0.2s, font-size 0.2s;
+    ">✈️</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
+}
+
+function MapClickHandler({ onClear }) {
+  useMapEvents({
+    click: () => onClear(),
+  });
+  return null;
 }
 
 function App() {
@@ -25,7 +39,7 @@ function App() {
 
   const bbox = REGIONS[regionName];
   const { aircraft, status } = useAircraft(bbox, USE_SAMPLE);
-  const nowS = Date.now() / 1000;
+  const nowS = (status.lastUpdated ?? 0) / 1000;
 
   useEffect(() => {
     console.log("Aircraft:", aircraft);
@@ -35,6 +49,7 @@ function App() {
     (a) => (a.altitude ?? 0) >= minAlt && (a.velocity ?? 0) >= minSpeed
   );
 
+  const totalAircraft = Object.keys(aircraft).length;
   const center = [(bbox.lamin + bbox.lamax) / 2, (bbox.lomin + bbox.lomax) / 2];
 
   return (
@@ -49,7 +64,7 @@ function App() {
         <label className="boxes">Min altitude (m): <input type="number" value={minAlt} onChange={(e) => setMinAlt(Number(e.target.value))} /></label>
         <label className="boxes">Min speed (m/s): <input type="number" value={minSpeed} onChange={(e) => setMinSpeed(Number(e.target.value))} /></label>
 
-        <p className="boxes"><b>Aircraft: {visible.length}</b></p>
+        <p className="boxes"><b>Showing {visible.length} of {totalAircraft} aircraft</b></p>
 
         {status.lastUpdated && (
           <span className="boxes">Last updated: {new Date(status.lastUpdated).toLocaleTimeString()}</span>
@@ -60,29 +75,39 @@ function App() {
 
       <div className="map-wrapper">
         <MapContainer key={regionName} center={center} zoom={6} className="map">
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap contributors" />
+          <MapClickHandler onClear={() => setSelectedId(null)} />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap contributors" />
 
-        {visible.map((a) => {
-          const stale = a.seenAt != null && nowS - a.seenAt > 45;
+          {visible.map((a) => {
+            const stale = a.seenAt != null && nowS - a.seenAt > 45;
+            const isSelected = a.id === selectedId;
 
-          return (
-            <Marker key={a.id} position={[a.lat, a.lon]} icon={planeIcon(a.heading, stale)} eventHandlers={{ click: () => setSelectedId(a.id) }}>
-              <Popup>
-                <b>{a.callsign || "Unknown callsign"}</b> ({a.country})<br />
-                Altitude: {a.altitude != null ? Math.round(a.altitude) + " m" : "unknown"}<br />
-                Speed: {a.velocity != null ? Math.round(a.velocity) + " m/s" : "unknown"}<br />
-                Heading: {a.heading != null ? Math.round(a.heading) + "°" : "unknown"}<br />
-                Last contact: {a.lastContact ? new Date(a.lastContact * 1000).toLocaleTimeString() : "unknown"}
-                {stale && <><br /><i>Data may be outdated</i></>}
-              </Popup>
-            </Marker>
-          );
-        })}
+            return (
+              <Marker
+                key={a.id}
+                position={[a.lat, a.lon]}
+                icon={planeIcon(a.heading, stale, isSelected)}
+                eventHandlers={{ click: () => setSelectedId(a.id) }}
+              >
+                <Popup>
+                  <b>{a.callsign || "Unknown callsign"}</b> ({a.country})<br />
+                  Altitude: {a.altitude != null ? Math.round(a.altitude) + " m" : "unknown"}<br />
+                  Speed: {a.velocity != null ? Math.round(a.velocity) + " m/s" : "unknown"}<br />
+                  Heading: {a.heading != null ? Math.round(a.heading) + "°" : "unknown"}<br />
+                  Last contact: {a.lastContact ? new Date(a.lastContact * 1000).toLocaleTimeString() : "unknown"}
+                  {stale && <><br /><i>Data may be outdated</i></>}
+                </Popup>
+              </Marker>
+            );
+          })}
 
-        {selectedId && aircraft[selectedId]?.trail?.length > 1 && (
-          <Polyline positions={aircraft[selectedId].trail} />
-        )}
-      </MapContainer>
+          {selectedId && aircraft[selectedId]?.trail?.length > 1 && (
+            <Polyline
+              positions={aircraft[selectedId].trail}
+              pathOptions={{ color: "#ff3333", weight: 3 }}
+            />
+          )}
+        </MapContainer>
       </div>
     </div>
   );

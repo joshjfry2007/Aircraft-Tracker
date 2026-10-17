@@ -14,7 +14,8 @@ export async function toFetchStates({lamin, lomin, lamax, lomax}, useSample = fa
     }
 
     return (data.states ?? [])
-        .filter((o) => o[5] != null && o[6] != null )
+        .filter((o) => o[5] != null && o[6] != null)
+        .filter((o) => !useSample || (o[6] >= lamin && o[6] <= lamax && o[5] >= lomin && o[5] <= lomax))
         .map((o) => ({
             id: o[0],
             callsign: (o[1] || "").trim() || "N/A",
